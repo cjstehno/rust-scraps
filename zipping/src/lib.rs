@@ -2,7 +2,6 @@
 #[macro_use]
 extern crate hamcrest2;
 
-use core::borrow::Borrow;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -60,7 +59,7 @@ fn zip_multiple(writer: &mut ZipWriter<&File>, path: &Path, options: FileOptions
 
     while !directories.is_empty() {
         let directory = directories.pop().unwrap();
-        writer.add_directory(directory.to_str().unwrap(), options)?;
+        writer.add_directory(directory.to_str().unwrap().replace("\\", "/"), options)?;
 
         for dir_entry in directory.read_dir().unwrap() {
             let entry = dir_entry.unwrap();
@@ -69,7 +68,7 @@ fn zip_multiple(writer: &mut ZipWriter<&File>, path: &Path, options: FileOptions
             if file_type.is_dir() {
                 directories.push(entry.path());
             } else if file_type.is_file() {
-                writer.start_file(directory.join(entry.file_name().to_str().unwrap()).to_str().unwrap(), options)?;
+                writer.start_file(directory.join(entry.path().components().last().unwrap()).to_str().unwrap().replace("\\", "/"), options)?;
 
                 let mut file = File::open(entry.path()).unwrap();
                 file.read_to_end(&mut buffer)?;
@@ -147,9 +146,16 @@ mod tests {
         // make sure the file has the items we expect
         let listing_file = File::open(&zip_path).unwrap();
         let entries = list_zip_contents(&listing_file).expect("Unable to list zip contents!");
-        println!("entries: {:?}", &entries);
 
         assert_that!(&entries, len(9));
-        assert_that!(&entries.contains("file-a.txt (12 bytes, 27 compressed)".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/file-a.txt (12 bytes, 27 compressed)".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/alpha/".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/alpha/file-b.txt (15 bytes, 28 compressed)".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/alpha/charlie/".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/alpha/charlie/file-d.txt (24 bytes, 34 compressed)".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/alpha/charlie/file-e.txt (35 bytes, 43 compressed)".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/alpha/bravo/".to_string().borrow()), equal_to(true));
+        assert_that!(&entries.contains("rc/alpha/bravo/file-c.txt (22 bytes, 34 compressed)".to_string().borrow()), equal_to(true));
     }
 }
