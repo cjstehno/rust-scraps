@@ -2,8 +2,8 @@
 #[macro_use]
 extern crate hamcrest2;
 
-use std::fs::File;
-use std::io::{Read, Write};
+use std::fs::{create_dir_all, File};
+use std::io::{copy, Read, Write};
 use std::path::Path;
 
 use zip::{ZipArchive, ZipWriter};
@@ -19,7 +19,6 @@ use zip::write::FileOptions;
 /// * `path` - the path to the file or directory to be zipped
 /// * `zip_file` - the file handle to the zip file being created
 ///
-#[allow(dead_code)]
 pub fn create_zip_file(path: &Path, zip_file: &File) -> ZipResult<()> {
     let mut writer = ZipWriter::new(zip_file);
 
@@ -81,7 +80,14 @@ fn zip_multiple(writer: &mut ZipWriter<&File>, path: &Path, options: FileOptions
     Ok(())
 }
 
-/// FIXME: document
+////
+/// Lists the entries in a given zip file (files and directories). Files will have information
+/// about their actual and compressed size.
+///
+/// # Arguments
+///
+/// * `zip_file` - the file handle to the zip file being listed
+///
 pub fn list_zip_contents(zip_file: &File) -> ZipResult<Vec<String>> {
     let mut archive = ZipArchive::new(zip_file)?;
 
@@ -94,18 +100,106 @@ pub fn list_zip_contents(zip_file: &File) -> ZipResult<Vec<String>> {
         .collect()
 }
 
+///
+/// FIXME: document
+///
+pub fn unzip_file(zip_file: &File, out_path: &Path) -> ZipResult<()> {
+    let mut archive = ZipArchive::new(zip_file)?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        let file_path = out_path.join(file.sanitized_name());
+
+        if (&*file.name()).ends_with('/') {
+            // create the directory entry
+            create_dir_all(&file_path).unwrap();
+        } else {
+            // create any missing parent directories
+            if let Some(p) = file_path.parent() {
+                if !p.exists() {
+                    create_dir_all(&p).unwrap();
+                }
+            }
+
+            // create the file
+            let mut out_file = File::create(&file_path).unwrap();
+            copy(&mut file, &mut out_file).unwrap();
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use core::borrow::Borrow;
     use std::fs::File;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use hamcrest2::equal_to;
     use hamcrest2::matchers::compared_to::greater_than;
     use hamcrest2::prelude::*;
     use tempfile::TempDir;
 
-    use crate::{create_zip_file, list_zip_contents};
+    use crate::{create_zip_file, list_zip_contents, unzip_file};
+
+    #[test]
+    fn unzip_a_file() {
+        // create a zip file to unzip
+        let temp_dir = TempDir::new().unwrap();
+        let zip_path = temp_dir.path().join("multi-file.zip");
+        let zip_file = File::create(&zip_path).unwrap();
+        let content_path = Path::new("rc/");
+
+        create_zip_file(content_path, &zip_file).expect("Failed to create zip file!");
+        assert_that!(zip_path.exists(), equal_to(true));
+
+        // unzip the file
+        let zipped_file = File::open(&zip_path).unwrap();
+        let unzipped_path = temp_dir.path().join("unzipped/");
+
+        unzip_file(&zipped_file, &unzipped_path).expect("Problem unzipping file!");
+
+        // TODO: assert that the contents are in the dir
+        for f in list_files_recursive(&unzipped_path){
+            println!(" -> {:?}", f);
+        }
+
+        let unzipped_file_paths = list_files_recursive(&unzipped_path);
+        let has_a = unzipped_file_paths.iter().find(|pth| pth.to_str().unwrap().replace("\\", "/").ends_with("/rd/file-a.txt"));
+        assert_that!(has_a, some());
+
+//        assert_that!(unzipped_file_paths.contains("".to_string().borrow()), equal_to(true));
+
+//        assert_that(unzipped_path.read_dir().unwrap())
+        /*
+ -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\file-a.txt"
+ -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\alpha\\file-b.txt"
+ -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\alpha\\charlie\\file-d.txt"
+ -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\alpha\\charlie\\file-e.txt"
+ -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\alpha\\bravo\\file-c.txt"
+ */
+    }
+
+    fn list_files_recursive(path: &Path) -> Vec<PathBuf> {
+        let mut file_paths = vec![];
+        let mut directories = vec![path.to_path_buf()];
+
+        while !directories.is_empty() {
+            for dir_entry in directories.pop().unwrap().read_dir().unwrap() {
+                let entry = dir_entry.unwrap();
+                let file_type = entry.file_type().unwrap();
+
+                if file_type.is_dir() {
+                    directories.push(entry.path());
+                } else if file_type.is_file() {
+                    file_paths.push(entry.path());
+                }
+            }
+        }
+
+        file_paths
+    }
 
     #[test]
     fn zip_single_file() {
