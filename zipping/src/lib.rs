@@ -1,10 +1,15 @@
+#[cfg(test)]
+#[macro_use]
+extern crate hamcrest2;
+
+use core::borrow::Borrow;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 
+use zip::{ZipArchive, ZipWriter};
 use zip::result::{ZipError, ZipResult};
 use zip::write::FileOptions;
-use zip::ZipWriter;
 
 ////
 /// Creates a compressed zip file from the path, which may be a single file or a directory. When
@@ -21,7 +26,7 @@ pub fn create_zip_file(path: &Path, zip_file: &File) -> ZipResult<()> {
 
     let options = FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
-        .unix_permissions(0o755);
+        .unix_permissions(0o777);
 
     if path.is_file() {
         zip_single(&mut writer, path, options)?;
@@ -78,18 +83,28 @@ fn zip_multiple(writer: &mut ZipWriter<&File>, path: &Path, options: FileOptions
 }
 
 /// FIXME: document
-pub fn list_files() -> Option<Vec<Path>> {
+pub fn list_zip_contents(zip_file: &File) -> ZipResult<Vec<String>> {
+    let mut archive = ZipArchive::new(zip_file)?;
 
+    (0..archive.len())
+        .map(|idx| archive.by_index(idx).and_then(|zf| {
+            Ok(format!("{} ({} bytes, {} compressed)", zf.name(), zf.size(), zf.compressed_size()))
+        }))
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs::File;
     use std::path::Path;
+    use core::borrow::Borrow;
 
+    use hamcrest2::equal_to;
+    use hamcrest2::matchers::compared_to::greater_than;
+    use hamcrest2::prelude::*;
     use tempfile::TempDir;
 
-    use crate::create_zip_file;
+    use crate::{create_zip_file, list_zip_contents};
 
     #[test]
     fn zip_single_file() {
@@ -101,11 +116,16 @@ mod tests {
 
         create_zip_file(path, &zip_file).expect("Failed to create zip file!");
 
-        assert_eq!(zip_path.is_file(), true);
-        assert_eq!(zip_path.exists(), true);
-        assert_eq!(zip_file.metadata().unwrap().len() > 0, true);
+        assert_that!(zip_path.is_file(), equal_to(true));
+        assert_that!(zip_path.exists(), equal_to(true));
+        assert_that!(zip_path.metadata().unwrap().len(), greater_than(100));
 
-        // TODO: assert that it has the specified contents
+        // make sure the file has the items we expect
+        let listing_file = File::open(&zip_path).unwrap();
+        let entries = list_zip_contents(&listing_file).expect("Unable to list zip contents!");
+
+        assert_that!(&entries, len(1));
+        assert_that!(&entries.contains("file-a.txt (12 bytes, 27 compressed)".to_string().borrow()), equal_to(true));
     }
 
     #[test]
@@ -118,10 +138,16 @@ mod tests {
 
         create_zip_file(path, &zip_file).expect("Failed to create zip file!");
 
-        assert_eq!(zip_path.is_file(), true);
-        assert_eq!(zip_path.exists(), true);
-        assert_eq!(zip_file.metadata().unwrap().len() > 0, true);
+        assert_that!(zip_path.is_file(), equal_to(true));
+        assert_that!(zip_path.exists(), equal_to(true));
+        assert_that!(zip_path.metadata().unwrap().len(), greater_than(1000));
 
-        // TODO: assert that it has the specified contents
+        // make sure the file has the items we expect
+        let listing_file = File::open(&zip_path).unwrap();
+        let entries = list_zip_contents(&listing_file).expect("Unable to list zip contents!");
+        println!("entries: {:?}", &entries);
+
+        assert_that!(&entries, len(1));
+        assert_that!(&entries.contains("file-a.txt (12 bytes, 27 compressed)".to_string().borrow()), equal_to(true));
     }
 }
