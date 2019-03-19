@@ -87,17 +87,19 @@ pub fn list_zip_contents(zip_file: &File) -> ZipResult<Vec<String>> {
     let mut archive = ZipArchive::new(zip_file)?;
 
     (0..archive.len())
-        .map(|idx| archive.by_index(idx).and_then(|zf| {
-            Ok(format!("{} ({} bytes, {} compressed)", zf.name(), zf.size(), zf.compressed_size()))
-        }))
+        .map(|idx| archive.by_index(idx).and_then(|zf| Ok(if zf.size() > 0 {
+            format!("{} ({} bytes, {} compressed)", zf.name(), zf.size(), zf.compressed_size())
+        } else {
+            format!("{}", zf.name())
+        })))
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
+    use core::borrow::Borrow;
     use std::fs::File;
     use std::path::Path;
-    use core::borrow::Borrow;
 
     use hamcrest2::equal_to;
     use hamcrest2::matchers::compared_to::greater_than;
@@ -147,7 +149,7 @@ mod tests {
         let entries = list_zip_contents(&listing_file).expect("Unable to list zip contents!");
         println!("entries: {:?}", &entries);
 
-        assert_that!(&entries, len(1));
+        assert_that!(&entries, len(9));
         assert_that!(&entries.contains("file-a.txt (12 bytes, 27 compressed)".to_string().borrow()), equal_to(true));
     }
 }
