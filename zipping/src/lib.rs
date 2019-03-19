@@ -7,7 +7,8 @@ use zip::write::FileOptions;
 use zip::ZipWriter;
 
 ////
-/// Creates a compressed zip file from the path, which may be a single file or a directory.
+/// Creates a compressed zip file from the path, which may be a single file or a directory. When
+/// zipping a directory, the specified directory will be the top-level entry of the zip file.
 ///
 /// # Arguments
 ///
@@ -15,54 +16,70 @@ use zip::ZipWriter;
 /// * `zip_file` - the file handle to the zip file being created
 ///
 #[allow(dead_code)]
-fn create_zip_file(path: &Path, zip_file: &File) -> ZipResult<()> {
+pub fn create_zip_file(path: &Path, zip_file: &File) -> ZipResult<()> {
     let mut writer = ZipWriter::new(zip_file);
 
     let options = FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .unix_permissions(0o755);
 
-    let mut buffer = vec![];
-
     if path.is_file() {
-        // zip a single file
-        writer.start_file(path.file_name().unwrap().to_str().unwrap(), options)?;
-        let mut file = File::open(path).unwrap();
-
-        file.read_to_end(&mut buffer)?;
-        writer.write_all(&*buffer)?;
-        buffer.clear();
+        zip_single(&mut writer, path, options)?;
     } else if path.is_dir() {
-        // zip a directory of files
-        let mut directories = vec![path.to_path_buf()];
-
-        while !directories.is_empty() {
-            let directory = directories.pop().unwrap();
-            writer.add_directory(directory.to_str().unwrap(), options)?;
-
-            for dir_entry in directory.read_dir().unwrap() {
-                let entry = dir_entry.unwrap();
-                let file_type = entry.file_type().unwrap();
-
-                if file_type.is_dir() {
-                    directories.push(entry.path());
-                } else if file_type.is_file() {
-                    writer.start_file(directory.join(entry.file_name().to_str().unwrap()).to_str().unwrap(), options)?;
-
-                    let mut file = File::open(entry.path()).unwrap();
-                    file.read_to_end(&mut buffer)?;
-                    writer.write_all(&*buffer)?;
-                    buffer.clear();
-                }
-            }
-        }
+        zip_multiple(&mut writer, path, options)?;
     } else {
+        // path is not a file or directory
         return Err(ZipError::FileNotFound);
     }
 
     writer.finish()?;
 
     Ok(())
+}
+
+fn zip_single(writer: &mut ZipWriter<&File>, path: &Path, options: FileOptions) -> ZipResult<()> {
+    writer.start_file(path.file_name().unwrap().to_str().unwrap(), options)?;
+    let mut file = File::open(path).unwrap();
+
+    let mut buffer = vec![];
+    file.read_to_end(&mut buffer)?;
+    writer.write_all(&*buffer)?;
+    buffer.clear();
+
+    Ok(())
+}
+
+fn zip_multiple(writer: &mut ZipWriter<&File>, path: &Path, options: FileOptions) -> ZipResult<()> {
+    let mut buffer = vec![];
+    let mut directories = vec![path.to_path_buf()];
+
+    while !directories.is_empty() {
+        let directory = directories.pop().unwrap();
+        writer.add_directory(directory.to_str().unwrap(), options)?;
+
+        for dir_entry in directory.read_dir().unwrap() {
+            let entry = dir_entry.unwrap();
+            let file_type = entry.file_type().unwrap();
+
+            if file_type.is_dir() {
+                directories.push(entry.path());
+            } else if file_type.is_file() {
+                writer.start_file(directory.join(entry.file_name().to_str().unwrap()).to_str().unwrap(), options)?;
+
+                let mut file = File::open(entry.path()).unwrap();
+                file.read_to_end(&mut buffer)?;
+                writer.write_all(&*buffer)?;
+                buffer.clear();
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// FIXME: document
+pub fn list_files() -> Option<Vec<Path>> {
+
 }
 
 #[cfg(test)]
