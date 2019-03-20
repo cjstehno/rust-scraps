@@ -134,7 +134,7 @@ pub fn unzip_file(zip_file: &File, out_path: &Path) -> ZipResult<()> {
 mod tests {
     use core::borrow::Borrow;
     use std::fs::File;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     use hamcrest2::equal_to;
     use hamcrest2::matchers::compared_to::greater_than;
@@ -160,28 +160,18 @@ mod tests {
 
         unzip_file(&zipped_file, &unzipped_path).expect("Problem unzipping file!");
 
-        // TODO: assert that the contents are in the dir
-        for f in list_files_recursive(&unzipped_path){
-            println!(" -> {:?}", f);
-        }
-
+        // make sure the unzipped directory has the expected contents
         let unzipped_file_paths = list_files_recursive(&unzipped_path);
-        let has_a = unzipped_file_paths.iter().find(|pth| pth.to_str().unwrap().replace("\\", "/").ends_with("/rd/file-a.txt"));
-        assert_that!(has_a, some());
+        assert_that!(unzipped_file_paths.len(), equal_to(5));
 
-//        assert_that!(unzipped_file_paths.contains("".to_string().borrow()), equal_to(true));
-
-//        assert_that(unzipped_path.read_dir().unwrap())
-        /*
- -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\file-a.txt"
- -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\alpha\\file-b.txt"
- -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\alpha\\charlie\\file-d.txt"
- -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\alpha\\charlie\\file-e.txt"
- -> "C:\\Users\\stehnoc\\AppData\\Local\\Temp\\.tmpzfgZ4N\\unzipped/rc\\alpha\\bravo\\file-c.txt"
- */
+        assert_that!(unzipped_file_paths[0].ends_with("/rc/file-a.txt"), equal_to(true));
+        assert_that!(unzipped_file_paths[1].ends_with("/rc/alpha/file-b.txt"), equal_to(true));
+        assert_that!(unzipped_file_paths[2].ends_with("/rc/alpha/charlie/file-d.txt"), equal_to(true));
+        assert_that!(unzipped_file_paths[3].ends_with("/rc/alpha/charlie/file-e.txt"), equal_to(true));
+        assert_that!(unzipped_file_paths[4].ends_with("/rc/alpha/bravo/file-c.txt"), equal_to(true));
     }
 
-    fn list_files_recursive(path: &Path) -> Vec<PathBuf> {
+    fn list_files_recursive(path: &Path) -> Vec<String> {
         let mut file_paths = vec![];
         let mut directories = vec![path.to_path_buf()];
 
@@ -189,11 +179,12 @@ mod tests {
             for dir_entry in directories.pop().unwrap().read_dir().unwrap() {
                 let entry = dir_entry.unwrap();
                 let file_type = entry.file_type().unwrap();
+                let entry_path = entry.path();
 
                 if file_type.is_dir() {
-                    directories.push(entry.path());
+                    directories.push(entry_path);
                 } else if file_type.is_file() {
-                    file_paths.push(entry.path());
+                    file_paths.push(entry_path.to_str().unwrap().to_string().replace("\\", "/"));
                 }
             }
         }

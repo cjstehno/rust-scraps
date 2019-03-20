@@ -8,7 +8,7 @@ Some coding experiments working with zip and tar files in Rust.
 
 * [x] Create a zip file from a list of files.
 * [x] List the contents of a zip file.
-* [ ] Unzip a zip file to a directory.
+* [x] Unzip a zip file to a directory.
 * [ ] Create a tar file (with optional compression).
 * [ ] List the contents of a tar file (compressed or not).
 * [ ] Un-bundle a tar file (compressed or not).
