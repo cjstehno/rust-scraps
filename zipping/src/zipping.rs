@@ -147,6 +147,7 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::zipping::{create_zip_file, list_zip_contents, unzip_file};
+    use crate::list_files_recursive;
 
     #[test]
     fn unzip_a_file() {
@@ -174,27 +175,6 @@ mod tests {
         assert_that!(unzipped_file_paths[2].ends_with("/rc/alpha/charlie/file-d.txt"), equal_to(true));
         assert_that!(unzipped_file_paths[3].ends_with("/rc/alpha/charlie/file-e.txt"), equal_to(true));
         assert_that!(unzipped_file_paths[4].ends_with("/rc/alpha/bravo/file-c.txt"), equal_to(true));
-    }
-
-    fn list_files_recursive(path: &Path) -> Vec<String> {
-        let mut file_paths = vec![];
-        let mut directories = vec![path.to_path_buf()];
-
-        while !directories.is_empty() {
-            for dir_entry in directories.pop().unwrap().read_dir().unwrap() {
-                let entry = dir_entry.unwrap();
-                let file_type = entry.file_type().unwrap();
-                let entry_path = entry.path();
-
-                if file_type.is_dir() {
-                    directories.push(entry_path);
-                } else if file_type.is_file() {
-                    file_paths.push(entry_path.to_str().unwrap().to_string().replace("\\", "/"));
-                }
-            }
-        }
-
-        file_paths
     }
 
     #[test]
