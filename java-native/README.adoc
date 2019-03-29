@@ -1,0 +1,28 @@
+# Java JNI with Rust
+
+See: https://www.ibm.com/developerworks/java/library/j-jni/
+
+Compile the Java `HelloWorld.java` file:
+
+    javac HelloWorld.java
+
+To generate the header (which is just to figure out the signatures - not used):
+
+    javac -h HelloWorld.java
+
+To build the library:
+
+    cd mylib
+    cargo build
+
+Set the library path in your shell:
+
+    export LD_LIBRARY_PATH=mylib/target/debug
+
+Run the java class:
+
+    java HelloWorld
+
+Which should yield:
+
+    Hello, Rust!!
